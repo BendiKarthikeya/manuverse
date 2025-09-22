@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, FileText, Building, User, MessageSquare, Upload, Check, X, FileCheck } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.REACT_APP_SUPABASE_URL,
+  process.env.REACT_APP_SUPABASE_ANON_KEY
+);
 
 const TemplateChatbot = ({ user }) => {
   const [messages, setMessages] = useState([]);
@@ -11,33 +17,10 @@ const TemplateChatbot = ({ user }) => {
   const [missingDocuments, setMissingDocuments] = useState([]);
   const [currentDocumentIndex, setCurrentDocumentIndex] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [userDocuments, setUserDocuments] = useState({});
+  const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
-
-  // Mock database - extracted data from previously uploaded documents
-  const existingDocumentData = {
-    panCard: {
-      uploaded: true,
-      data: {
-        name: user?.user_metadata?.full_name || "John Doe",
-        pan: "ABCDE1234F",
-        fatherName: "Robert Doe",
-        dateOfBirth: "1990-01-15"
-      }
-    },
-    aadhaarCard: {
-      uploaded: true,
-      data: {
-        name: user?.user_metadata?.full_name || "John Doe",
-        aadhaar: "1234-5678-9012",
-        address: "123 Main Street, Mumbai, Maharashtra 400001",
-        dateOfBirth: "1990-01-15"
-      }
-    },
-    // bankStatement: { uploaded: false, data: null },
-    // form16: { uploaded: false, data: null },
-    // incorporationCertificate: { uploaded: false, data: null }
-  };
 
   // Template definitions with required documents for data extraction
   const templates = [
@@ -48,7 +31,7 @@ const TemplateChatbot = ({ user }) => {
       requiredDocuments: [
         {
           id: 'panCard',
-          name: 'PAN Card',
+          name: 'PAN Card', 
           description: 'For exporter details and PAN verification',
           extractedData: ['name', 'pan', 'address']
         },
@@ -60,7 +43,7 @@ const TemplateChatbot = ({ user }) => {
         },
         {
           id: 'gstCertificate',
-          name: 'GST Certificate',
+          name: 'GST Registration Certificate',
           description: 'For GST registration details',
           extractedData: ['gstNumber', 'businessName', 'registrationDate']
         },
@@ -79,7 +62,7 @@ const TemplateChatbot = ({ user }) => {
       requiredDocuments: [
         {
           id: 'exportInvoice',
-          name: 'Export Invoice',
+          name: 'Commercial Invoice',
           description: 'Product and quantity details',
           extractedData: ['products', 'quantities', 'weights', 'dimensions']
         },
@@ -98,7 +81,7 @@ const TemplateChatbot = ({ user }) => {
       requiredDocuments: [
         {
           id: 'exportInvoice',
-          name: 'Export Invoice',
+          name: 'Commercial Invoice',
           description: 'Invoice details for customs',
           extractedData: ['invoiceNumber', 'invoiceDate', 'totalValue', 'currency']
         },
@@ -110,7 +93,7 @@ const TemplateChatbot = ({ user }) => {
         },
         {
           id: 'gstCertificate',
-          name: 'GST Certificate',
+          name: 'GST Registration Certificate',
           description: 'Tax registration details',
           extractedData: ['gstNumber', 'businessAddress']
         }
@@ -123,7 +106,7 @@ const TemplateChatbot = ({ user }) => {
       requiredDocuments: [
         {
           id: 'manufacturingDetails',
-          name: 'Manufacturing Certificate',
+          name: 'Manufacturing Certificate/License',
           description: 'Product origin verification',
           extractedData: ['manufacturingLocation', 'productOrigin', 'manufacturerName']
         },
@@ -142,7 +125,7 @@ const TemplateChatbot = ({ user }) => {
       requiredDocuments: [
         {
           id: 'bankStatement',
-          name: 'Bank Statement',
+          name: 'Bank Statement (Last 6 months)',
           description: 'Financial standing verification',
           extractedData: ['accountBalance', 'bankName', 'accountNumber']
         },
@@ -167,7 +150,7 @@ const TemplateChatbot = ({ user }) => {
       requiredDocuments: [
         {
           id: 'exportInvoice',
-          name: 'Export Invoice',
+          name: 'Commercial Invoice',
           description: 'Cargo value and details',
           extractedData: ['cargoValue', 'products', 'destination']
         },
@@ -181,6 +164,42 @@ const TemplateChatbot = ({ user }) => {
     }
   ];
 
+  // Fetch user's uploaded documents from database
+  const fetchUserDocuments = async () => {
+    if (!user?.id) return;
+    
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('user_documents')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error fetching documents:', error);
+        return;
+      }
+
+      // Transform data into the format expected by the component
+      const documentsMap = {};
+      data?.forEach(doc => {
+        documentsMap[doc.document_type] = {
+          uploaded: true,
+          fileName: doc.file_name,
+          uploadedAt: doc.uploaded_at,
+          data: doc.extracted_data || {},
+          status: doc.processing_status
+        };
+      });
+
+      setUserDocuments(documentsMap);
+    } catch (error) {
+      console.error('Error in fetchUserDocuments:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -192,7 +211,11 @@ const TemplateChatbot = ({ user }) => {
   useEffect(() => {
     // Initialize with personalized welcome message
     const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'there';
-    addBotMessage(`Hello ${userName}! I'm E-CHA, your AI assistant for export documentation. I can help you generate professional export documents using your uploaded data. Click 'Hi' to get started!`);
+    addBotMessage(`Hello ${userName}! I'm E-CHA, your AI assistant for export documentation. I can help you generate professional export documents using your uploaded data. Click 'Get Started' to begin!`);
+  }, [user]);
+
+  useEffect(() => {
+    fetchUserDocuments();
   }, [user]);
 
   const addBotMessage = (text, isButton = false, buttons = []) => {
@@ -273,19 +296,19 @@ const TemplateChatbot = ({ user }) => {
       )
     ).values()];
 
-    // Check which documents are missing
-    const missingDocs = allRequiredDocs.filter(doc => !existingDocumentData[doc.id]?.uploaded);
+    // Check which documents are missing from user's uploaded documents
+    const missingDocs = allRequiredDocs.filter(doc => !userDocuments[doc.id]?.uploaded);
     setMissingDocuments(missingDocs);
 
     if (missingDocs.length === 0) {
       setTimeout(() => {
-        addBotMessage("Perfect! All required documents are already uploaded and processed. Generating your export documents with extracted data...");
+        addBotMessage("Perfect! All required documents are already uploaded and processed. I have all the data needed to generate your export documents.");
         handleTemplateGeneration();
       }, 500);
     } else {
       setTimeout(() => {
         const missingList = missingDocs.map(doc => `• ${doc.name}`).join('\n');
-        addBotMessage(`I need to extract data from some documents for your export documentation. The following documents are missing:\n\n${missingList}\n\nI'll ask you to upload them one by one.`);
+        addBotMessage(`I need some additional documents to generate your export documentation. The following documents are required:\n\n${missingList}\n\nI'll guide you to upload them one by one so I can extract the necessary data.`);
         askForDocument(0);
       }, 500);
     }
@@ -318,50 +341,57 @@ const TemplateChatbot = ({ user }) => {
     const file = event.target.files[0];
     if (!file) return;
 
+    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      addBotMessage("❌ File size too large. Please upload a file smaller than 10MB.");
+      return;
+    }
     setIsUploading(true);
     const document = missingDocuments[currentDocumentIndex];
     
     addFileMessage(file.name, 'uploading');
 
-    // Simulate document processing and data extraction
-    setTimeout(() => {
-      // Mock extracted data based on document type
-      let extractedData = {};
-      if (document.id === 'iecCertificate') {
-        extractedData = {
-          iecCode: "IEC1234567890",
-          companyName: "Export Corp Ltd",
-          validityDate: "2025-12-31"
-        };
-      } else if (document.id === 'gstCertificate') {
-        extractedData = {
-          gstNumber: "27ABCDE1234F1Z5",
-          businessName: "Export Corp Ltd",
-          registrationDate: "2020-04-01"
-        };
-      } else if (document.id === 'bankStatement') {
-        extractedData = {
-          accountNumber: "1234567890",
-          ifscCode: "HDFC0001234",
-          swiftCode: "HDFCINBB",
-          bankName: "HDFC Bank"
-        };
-      } else if (document.id === 'exportInvoice') {
-        extractedData = {
-          invoiceNumber: "EXP/2024/001",
-          invoiceDate: "2024-01-15",
-          totalValue: "50000",
-          currency: "USD"
-        };
+    // Upload file to backend for processing
+    uploadDocumentToBackend(file, document);
+  };
+
+  const uploadDocumentToBackend = async (file, document) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('user_id', user.id);
+      formData.append('document_type', document.id);
+      formData.append('document_name', document.name);
+      formData.append('expected_data', JSON.stringify(document.extractedData));
+
+      // Upload to your backend processing endpoint
+      const response = await fetch('/api/upload-document', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Upload failed');
       }
 
-      // Update uploaded documents
+      const result = await response.json();
+      
+      // Update local state
+      setUserDocuments(prev => ({
+        ...prev,
+        [document.id]: {
+          uploaded: true,
+          fileName: file.name,
+          data: result.extractedData || {},
+          status: 'processed'
+        }
+      }));
+
       setUploadedDocuments(prev => ({
         ...prev,
         [document.id]: {
           uploaded: true,
           fileName: file.name,
-          data: extractedData
+          data: result.extractedData || {}
         }
       }));
 
@@ -376,15 +406,32 @@ const TemplateChatbot = ({ user }) => {
       );
 
       setTimeout(() => {
-        const dataList = Object.keys(extractedData).map(key => `• ${key}: ${extractedData[key]}`).join('\n');
-        addBotMessage(`✅ ${document.name} processed successfully!\n\n📊 Extracted data:\n${dataList}`);
+        if (result.extractedData && Object.keys(result.extractedData).length > 0) {
+          const dataList = Object.keys(result.extractedData).map(key => `• ${key}: ${result.extractedData[key]}`).join('\n');
+          addBotMessage(`✅ ${document.name} processed successfully!\n\n📊 Extracted data:\n${dataList}`);
+        } else {
+          addBotMessage(`✅ ${document.name} uploaded successfully! Processing in background...`);
+        }
         
         const nextIndex = currentDocumentIndex + 1;
         setCurrentDocumentIndex(nextIndex);
         askForDocument(nextIndex);
       }, 1000);
 
-    }, 3000); // Simulate processing time
+    } catch (error) {
+      console.error('Upload error:', error);
+      setIsUploading(false);
+      
+      // Update the file message to show error
+      setMessages(prev => 
+        prev.map(msg => 
+          msg.text === file.name && msg.isFile ? 
+          { ...msg, fileStatus: 'error' } : msg
+        )
+      );
+      
+      addBotMessage(`❌ Failed to upload ${document.name}. Please try again or contact support if the issue persists.`);
+    }
   };
 
   const handleTemplateGeneration = () => {
@@ -392,11 +439,13 @@ const TemplateChatbot = ({ user }) => {
       const templateList = selectedTemplates.map(t => `• ${t.name}`).join('\n');
       
       // Count total extracted data points
-      const totalDataPoints = Object.values({...existingDocumentData, ...uploadedDocuments})
+      const totalDataPoints = Object.values({...userDocuments, ...uploadedDocuments})
         .filter(doc => doc.uploaded)
         .reduce((count, doc) => count + Object.keys(doc.data || {}).length, 0);
       
-      addBotMessage(`🎉 Success! Your export documents have been generated:\n\n${templateList}\n\n📊 Data extracted from ${Object.keys({...existingDocumentData, ...uploadedDocuments}).filter(key => ({...existingDocumentData, ...uploadedDocuments})[key].uploaded).length} documents\n📋 ${totalDataPoints} data points used for document completion\n\n✅ All documents are ready for download and are compliant with export regulations.`);
+      const totalDocs = Object.keys({...userDocuments, ...uploadedDocuments}).filter(key => ({...userDocuments, ...uploadedDocuments})[key].uploaded).length;
+      
+      addBotMessage(`🎉 Success! Your export documents are being generated:\n\n${templateList}\n\n📊 Data extracted from ${totalDocs} documents\n📋 ${totalDataPoints} data points used for document completion\n\n✅ Documents will be ready for download shortly and will be compliant with export regulations.`);
       
       setTimeout(() => {
         addBotMessage("Is there anything else I can help you with?", true, [
@@ -412,7 +461,7 @@ const TemplateChatbot = ({ user }) => {
   const handleViewData = () => {
     addUserMessage("View Extracted Data");
     
-    const allData = {...existingDocumentData, ...uploadedDocuments};
+    const allData = {...userDocuments, ...uploadedDocuments};
     const dataEntries = Object.entries(allData)
       .filter(([key, doc]) => doc.uploaded)
       .map(([key, doc]) => {
@@ -429,7 +478,11 @@ const TemplateChatbot = ({ user }) => {
       .join('\n\n');
 
     setTimeout(() => {
-      addBotMessage(`Here's all the data extracted from your documents:\n\n${dataEntries}`);
+      if (dataEntries) {
+        addBotMessage(`Here's all the data extracted from your documents:\n\n${dataEntries}`);
+      } else {
+        addBotMessage("No document data available yet. Please upload some documents first.");
+      }
     }, 500);
   };
 
@@ -484,7 +537,16 @@ const TemplateChatbot = ({ user }) => {
   };
 
   return (
-    <div className="flex flex-col h-[600px] bg-gray-50">
+    <div className="flex flex-col h-[600px] bg-gray-50 relative">
+      {loading && (
+        <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-2 border-manu-green border-t-transparent mx-auto mb-2"></div>
+            <p className="text-sm text-gray-600">Loading your documents...</p>
+          </div>
+        </div>
+      )}
+      
       {/* Header */}
       <div className="bg-manu-green shadow-sm border-b p-4">
         <div className="flex items-center space-x-3">
@@ -504,9 +566,10 @@ const TemplateChatbot = ({ user }) => {
           <div className="flex justify-center">
             <button
               onClick={handleHiClick}
-              className="bg-manu-green hover:bg-green-600 text-white px-8 py-3 rounded-full font-medium transition-colors shadow-lg"
+              className="bg-manu-green hover:bg-green-600 text-white px-8 py-3 rounded-full font-medium transition-colors shadow-lg disabled:opacity-50"
+              disabled={loading}
             >
-              Hi 👋
+              {loading ? 'Loading...' : 'Get Started 👋'}
             </button>
           </div>
         )}
@@ -561,7 +624,6 @@ const TemplateChatbot = ({ user }) => {
                     }`}
                   >
                     {button.icon && <span>{button.icon}</span>}
-                    }
                     <span>{button.text}</span>
                   </button>
                 ))}
@@ -609,7 +671,7 @@ const TemplateChatbot = ({ user }) => {
       {/* Status Bar */}
       {process.env.NODE_ENV === 'development' && (
         <div className="bg-gray-100 p-2 text-xs text-gray-600 border-t">
-          Selected: {selectedTemplates.length} | Step: {currentStep} | Missing Docs: {missingDocuments.length} | Uploaded: {Object.keys(uploadedDocuments).length}
+          Selected: {selectedTemplates.length} | Step: {currentStep} | Missing Docs: {missingDocuments.length} | User Docs: {Object.keys(userDocuments).length} | Session Uploads: {Object.keys(uploadedDocuments).length}
         </div>
       )}
     </div>
