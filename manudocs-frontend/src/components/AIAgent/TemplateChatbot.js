@@ -19,39 +19,148 @@ const TemplateChatbot = ({ user }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [userDocuments, setUserDocuments] = useState({});
   const [loading, setLoading] = useState(true);
+  const [collectionMode, setCollectionMode] = useState(null); // 'single' | 'all' | null
+  const [collectionTemplateId, setCollectionTemplateId] = useState(null);
+  const [currentCollectionDocs, setCurrentCollectionDocs] = useState([]);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // Template definitions with required documents for data extraction
+  // Fixed templates with required documents for data extraction
   const templates = [
     {
-      id: 'export-invoice',
-      name: 'Export Invoice',
+      id: 'debit-note',
+      name: 'Debit Note',
+      icon: <FileText className="w-5 h-5" />,
+      requiredDocuments: [
+        {
+          id: 'exportInvoice',
+          name: 'Commercial Invoice',
+          description: 'Reference invoice for adjustments',
+          extractedData: ['invoiceNumber', 'invoiceDate', 'buyer', 'currency', 'totalValue']
+        },
+        {
+          id: 'gstCertificate',
+          name: 'GST Registration Certificate',
+          description: 'For GSTIN and place of supply',
+          extractedData: ['gstNumber', 'businessAddress']
+        },
+        {
+          id: 'exportContract',
+          name: 'Export Contract / PO',
+          description: 'Original commercial terms for reference',
+          extractedData: ['contractValue', 'paymentTerms', 'deliveryTerms']
+        }
+      ]
+    },
+    {
+      id: 'credit-note',
+      name: 'Credit Note',
+      icon: <FileText className="w-5 h-5" />,
+      requiredDocuments: [
+        {
+          id: 'exportInvoice',
+          name: 'Commercial Invoice',
+          description: 'Reference invoice for adjustments',
+          extractedData: ['invoiceNumber', 'invoiceDate', 'buyer', 'currency', 'totalValue']
+        },
+        {
+          id: 'gstCertificate',
+          name: 'GST Registration Certificate',
+          description: 'For GSTIN and place of supply',
+          extractedData: ['gstNumber', 'businessAddress']
+        },
+        {
+          id: 'exportContract',
+          name: 'Export Contract / PO',
+          description: 'Original commercial terms for reference',
+          extractedData: ['contractValue', 'paymentTerms', 'deliveryTerms']
+        }
+      ]
+    },
+    {
+      id: 'export-delivery-challan',
+      name: 'Export Delivery Challan',
+      icon: <Building className="w-5 h-5" />,
+      requiredDocuments: [
+        {
+          id: 'exportInvoice',
+          name: 'Commercial Invoice',
+          description: 'Shipment reference and consignee details',
+          extractedData: ['invoiceNumber', 'consignee', 'destination']
+        },
+        {
+          id: 'shippingDetails',
+          name: 'Shipping Details',
+          description: 'Transport and port information',
+          extractedData: ['vesselName', 'portOfLoading', 'portOfDischarge', 'voyageNumber']
+        },
+        {
+          id: 'manufacturingDetails',
+          name: 'Manufacturing Details',
+          description: 'HS code and product specs',
+          extractedData: ['hsCode', 'productSpecs', 'countryOfOrigin']
+        }
+      ]
+    },
+    {
+      id: 'commercial-invoice',
+      name: 'Commercial Invoice',
       icon: <FileText className="w-5 h-5" />,
       requiredDocuments: [
         {
           id: 'panCard',
-          name: 'PAN Card', 
-          description: 'For exporter details and PAN verification',
+          name: 'PAN Card',
+          description: 'Exporter PAN and address',
           extractedData: ['name', 'pan', 'address']
         },
         {
           id: 'iecCertificate',
           name: 'IEC Certificate',
-          description: 'Import Export Code for trade authorization',
+          description: 'Import Export Code verification',
           extractedData: ['iecCode', 'companyName', 'validityDate']
         },
         {
           id: 'gstCertificate',
           name: 'GST Registration Certificate',
-          description: 'For GST registration details',
+          description: 'GSTIN and registration details',
           extractedData: ['gstNumber', 'businessName', 'registrationDate']
         },
         {
-          id: 'bankStatement',
-          name: 'Bank Statement',
-          description: 'For banking details and SWIFT code',
-          extractedData: ['accountNumber', 'ifscCode', 'swiftCode', 'bankName']
+          id: 'exportContract',
+          name: 'Export Contract / PO',
+          description: 'Buyer, terms, and pricing details',
+          extractedData: ['buyer', 'contractValue', 'paymentTerms', 'deliveryTerms']
+        },
+        {
+          id: 'shippingDetails',
+          name: 'Shipping Details',
+          description: 'Incoterms and shipment info',
+          extractedData: ['incoterms', 'portOfLoading', 'portOfDischarge']
+        }
+      ]
+    },
+    {
+      id: 'proforma-invoice',
+      name: 'Proforma Invoice',
+      icon: <FileText className="w-5 h-5" />,
+      requiredDocuments: [
+        {
+          id: 'companyProfile',
+          name: 'Company Profile',
+          description: 'Exporter company details',
+          extractedData: ['companyName', 'businessType', 'address']
+        },
+        {
+          id: 'exportContract',
+          name: 'Draft Export Contract / Enquiry',
+          description: 'Proposed terms and product list',
+          extractedData: ['products', 'proposedPrice', 'paymentTerms']
+        },
+        {
+          id: 'manufacturingDetails',
+          name: 'Manufacturing Details',
+          description: 'Product specs and HS code',
+          extractedData: ['productSpecs', 'hsCode', 'countryOfOrigin']
         }
       ]
     },
@@ -63,102 +172,14 @@ const TemplateChatbot = ({ user }) => {
         {
           id: 'exportInvoice',
           name: 'Commercial Invoice',
-          description: 'Product and quantity details',
+          description: 'Item and quantity references',
           extractedData: ['products', 'quantities', 'weights', 'dimensions']
         },
         {
           id: 'manufacturingDetails',
           name: 'Manufacturing Details',
-          description: 'Product specifications and origin',
+          description: 'Product specs and origin',
           extractedData: ['productSpecs', 'countryOfOrigin', 'hsCode']
-        }
-      ]
-    },
-    {
-      id: 'shipping-bill',
-      name: 'Shipping Bill',
-      icon: <FileText className="w-5 h-5" />,
-      requiredDocuments: [
-        {
-          id: 'exportInvoice',
-          name: 'Commercial Invoice',
-          description: 'Invoice details for customs',
-          extractedData: ['invoiceNumber', 'invoiceDate', 'totalValue', 'currency']
-        },
-        {
-          id: 'iecCertificate',
-          name: 'IEC Certificate',
-          description: 'Export authorization',
-          extractedData: ['iecCode', 'exporterName']
-        },
-        {
-          id: 'gstCertificate',
-          name: 'GST Registration Certificate',
-          description: 'Tax registration details',
-          extractedData: ['gstNumber', 'businessAddress']
-        }
-      ]
-    },
-    {
-      id: 'certificate-origin',
-      name: 'Certificate of Origin',
-      icon: <FileText className="w-5 h-5" />,
-      requiredDocuments: [
-        {
-          id: 'manufacturingDetails',
-          name: 'Manufacturing Certificate/License',
-          description: 'Product origin verification',
-          extractedData: ['manufacturingLocation', 'productOrigin', 'manufacturerName']
-        },
-        {
-          id: 'exportInvoice',
-          name: 'Export Invoice',
-          description: 'Product and destination details',
-          extractedData: ['products', 'destination', 'consignee']
-        }
-      ]
-    },
-    {
-      id: 'letter-credit',
-      name: 'Letter of Credit Application',
-      icon: <Building className="w-5 h-5" />,
-      requiredDocuments: [
-        {
-          id: 'bankStatement',
-          name: 'Bank Statement (Last 6 months)',
-          description: 'Financial standing verification',
-          extractedData: ['accountBalance', 'bankName', 'accountNumber']
-        },
-        {
-          id: 'exportContract',
-          name: 'Export Contract',
-          description: 'Trade agreement details',
-          extractedData: ['contractValue', 'paymentTerms', 'deliveryTerms']
-        },
-        {
-          id: 'companyProfile',
-          name: 'Company Profile',
-          description: 'Business credentials',
-          extractedData: ['companyName', 'businessType', 'experience']
-        }
-      ]
-    },
-    {
-      id: 'insurance-certificate',
-      name: 'Marine Insurance Certificate',
-      icon: <FileText className="w-5 h-5" />,
-      requiredDocuments: [
-        {
-          id: 'exportInvoice',
-          name: 'Commercial Invoice',
-          description: 'Cargo value and details',
-          extractedData: ['cargoValue', 'products', 'destination']
-        },
-        {
-          id: 'shippingDetails',
-          name: 'Shipping Details',
-          description: 'Transportation information',
-          extractedData: ['vesselName', 'voyageNumber', 'portOfLoading', 'portOfDischarge']
         }
       ]
     }
@@ -273,21 +294,41 @@ const TemplateChatbot = ({ user }) => {
     setSelectedTemplates(newSelectedTemplates);
     addUserMessage(template.name);
 
+    const missingForTemplate = template.requiredDocuments.filter(doc => !userDocuments[doc.id]?.uploaded);
+    const uploadedForTemplate = template.requiredDocuments.filter(doc => userDocuments[doc.id]?.uploaded);
+
     setTimeout(() => {
-      addBotMessage(`✓ ${template.name} selected! You can select more documents or click "Continue" to proceed.`, true, [
-        ...templates.filter(t => !newSelectedTemplates.find(st => st.id === t.id)).map(t => ({
-          id: t.id,
-          text: t.name,
-          icon: t.icon
-        })),
-        { id: 'continue', text: 'Continue with selected documents', style: 'primary' }
-      ]);
-    }, 500);
+      const listLines = [
+        ...uploadedForTemplate.map(doc => `✓ ${doc.name} (already uploaded)`),
+        ...missingForTemplate.map(doc => `• ${doc.name} (needed)`)
+      ].join('\n');
+
+      addBotMessage(
+        `Requirements for ${template.name}:\n\n${listLines}`,
+        true,
+        [
+          { id: `upload_now:${template.id}`, text: 'Upload required docs now', style: 'primary' },
+          { id: `provide_later:${template.id}`, text: 'Provide later' },
+        ]
+      );
+
+      // Also keep allowing more selections or continue
+      addBotMessage(
+        `You can select more documents or continue anytime.`,
+        true,
+        [
+          ...templates.filter(t => !newSelectedTemplates.find(st => st.id === t.id)).map(t => ({ id: t.id, text: t.name, icon: t.icon })),
+          { id: 'continue', text: 'Continue with selected documents', style: 'primary' }
+        ]
+      );
+    }, 400);
   };
 
   const handleContinue = () => {
     addUserMessage("Continue with selected documents");
     setCurrentStep('documentCheck');
+    setCollectionMode('all');
+    setCollectionTemplateId(null);
     
     // Get all required documents from selected templates
     const allRequiredDocs = [...new Map(
@@ -299,6 +340,7 @@ const TemplateChatbot = ({ user }) => {
     // Check which documents are missing from user's uploaded documents
     const missingDocs = allRequiredDocs.filter(doc => !userDocuments[doc.id]?.uploaded);
     setMissingDocuments(missingDocs);
+    setCurrentCollectionDocs(missingDocs);
 
     if (missingDocs.length === 0) {
       setTimeout(() => {
@@ -315,13 +357,28 @@ const TemplateChatbot = ({ user }) => {
   };
 
   const askForDocument = (index) => {
-    if (index >= missingDocuments.length) {
-      addBotMessage("Thank you! All documents have been processed. Generating your export documents with the extracted data...");
-      handleTemplateGeneration();
+    const docsQueue = currentCollectionDocs && currentCollectionDocs.length > 0 ? currentCollectionDocs : missingDocuments;
+    if (index >= docsQueue.length) {
+      if (collectionMode === 'single' && collectionTemplateId) {
+        const t = templates.find(tt => tt.id === collectionTemplateId);
+        addBotMessage(`All required documents for ${t?.name || 'the selected document'} are uploaded/processed. You can select more documents or click Continue.`);
+        // reset collection state
+        setCollectionMode(null);
+        setCollectionTemplateId(null);
+        setCurrentCollectionDocs([]);
+        // Offer next actions
+        addBotMessage('Next steps:', true, [
+          ...templates.map(tmp => ({ id: tmp.id, text: tmp.name, icon: tmp.icon })),
+          { id: 'continue', text: 'Continue with selected documents', style: 'primary' }
+        ]);
+      } else {
+        addBotMessage("Thank you! All documents have been processed. Generating your export documents with the extracted data...");
+        handleTemplateGeneration();
+      }
       return;
     }
 
-    const document = missingDocuments[index];
+    const document = docsQueue[index];
     setCurrentDocumentIndex(index);
     
     setTimeout(() => {
@@ -503,6 +560,31 @@ const TemplateChatbot = ({ user }) => {
       handleContinue();
     } else if (templates.find(t => t.id === buttonId)) {
       handleTemplateSelect(buttonId);
+    } else if (buttonId.startsWith('upload_now:')) {
+      const tid = buttonId.split(':')[1];
+      const template = templates.find(t => t.id === tid);
+      if (!template) return;
+      setCollectionMode('single');
+      setCollectionTemplateId(tid);
+      const missingForTemplate = template.requiredDocuments.filter(doc => !userDocuments[doc.id]?.uploaded);
+      setMissingDocuments(missingForTemplate);
+      setCurrentCollectionDocs(missingForTemplate);
+      setCurrentDocumentIndex(0);
+      addUserMessage('Upload required docs now');
+      if (missingForTemplate.length === 0) {
+        addBotMessage(`All required documents for ${template.name} are already uploaded.`);
+      } else {
+        askForDocument(0);
+      }
+    } else if (buttonId.startsWith('provide_later:')) {
+      const tid = buttonId.split(':')[1];
+      const template = templates.find(t => t.id === tid);
+      if (!template) return;
+      addUserMessage('Provide later');
+      addBotMessage(`Okay, we will collect documents for ${template.name} later. You can continue or select more documents.`, true, [
+        ...templates.map(tmp => ({ id: tmp.id, text: tmp.name, icon: tmp.icon })),
+        { id: 'continue', text: 'Continue with selected documents', style: 'primary' }
+      ]);
     } else if (buttonId === 'upload_document') {
       handleDocumentUpload();
     } else if (buttonId === 'view_data') {
@@ -624,7 +706,6 @@ const TemplateChatbot = ({ user }) => {
                     }`}
                   >
                     {button.icon && <span>{button.icon}</span>}
-                    }
                     <span>{button.text}</span>
                   </button>
                 ))}

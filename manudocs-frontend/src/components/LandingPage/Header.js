@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { Menu, X, User, LogOut } from 'lucide-react';
+import TemplateChatbot from '../AIAgent/TemplateChatbot';
 
 const Header = ({ onPageChange, user, onLogout }) => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
+    const [isAgentOpen, setIsAgentOpen] = useState(false);
 
     return (
         <header className="fixed top-0 w-full bg-white/90 backdrop-blur-md z-50 shadow-sm">
@@ -25,10 +27,10 @@ const Header = ({ onPageChange, user, onLogout }) => {
                     {/* Desktop Navigation - Updated */}
                     <nav className="hidden md:flex space-x-8">
                         <button
-                            onClick={() => user ? onPageChange('ai-agent') : onPageChange('auth')}
+                            onClick={() => user ? setIsAgentOpen((prev) => !prev) : onPageChange('auth')}
                             className="text-manu-dark hover:text-manu-green transition-colors font-medium text-sm"
                         >
-                            AI Agent
+                            {isAgentOpen ? 'Close Agent' : 'AI Agent'}
                         </button>
                         <button
                             onClick={() => user ? onPageChange('upload') : onPageChange('auth')}
@@ -121,7 +123,11 @@ const Header = ({ onPageChange, user, onLogout }) => {
                             <button
                                 onClick={() => {
                                     setIsMenuOpen(false); // Close menu
-                                    user ? onPageChange('ai-agent') : onPageChange('auth');
+                                    if (user) {
+                                        setIsAgentOpen(true);
+                                    } else {
+                                        onPageChange('auth');
+                                    }
                                 }}
                                 className="block px-3 py-2 text-manu-dark hover:text-manu-green w-full text-left text-sm"
                             >
@@ -174,6 +180,26 @@ const Header = ({ onPageChange, user, onLogout }) => {
                 )}
 
             </div>
+
+            {/* AI Agent Panel */}
+            {user && isAgentOpen && (
+                <div className="fixed inset-x-0 top-12 md:top-16 z-50">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div className="bg-white border border-gray-200 shadow-xl rounded-b-lg overflow-hidden">
+                            <div className="flex justify-between items-center px-4 py-2 border-b">
+                                <p className="text-sm text-gray-600">E-CHA is ready to help</p>
+                                <button
+                                    onClick={() => setIsAgentOpen(false)}
+                                    className="text-gray-500 hover:text-gray-700 text-sm"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                            <TemplateChatbot user={user} />
+                        </div>
+                    </div>
+                </div>
+            )}
         </header>
     );
 };
