@@ -624,6 +624,7 @@ const TemplateChatbot = ({ user }) => {
                     }`}
                   >
                     {button.icon && <span>{button.icon}</span>}
+                    }
                     <span>{button.text}</span>
                   </button>
                 ))}
